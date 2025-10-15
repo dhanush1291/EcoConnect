@@ -1,0 +1,275 @@
+1) Roles & Primary Goals
+
+Student / Volunteer: submit collections, earn EcoPoints, learn.
+
+Coordinator (Campus Ops): verify, create pickup batches, manage partners.
+
+Recycler / Partner: quote, schedule pickups, pay invoices.
+
+Admin: governance, pricing floors, partners, disputes, rewards catalog.
+
+IoT Device: send fill/weight/battery events.
+
+2) High-Level User Flows (Swimlanes)
+sequenceDiagram
+  autonumber
+  participant Student
+  participant WebApp
+  participant API
+  participant Coordinator
+  participant Recycler
+  participant IoT as IoT Gateway
+  participant Pay as Payment Provider
+
+  IoT->>API: POST /iot/events (binId, fill%, weight, battery)
+  API-->>WebApp: Update bin map & alerts
+
+  Student->>WebApp: Submit collection (photos, binId, estWeight)
+  WebApp->>API: POST /submissions (PENDING_QC)
+  API-->>Coordinator: Notify "items to verify"
+
+  Coordinator->>API: PATCH /submissions/:id (APPROVED/REJECTED)
+  API-->>Student: EcoPoints added (APPROVED)
+
+  Coordinator->>API: POST /batches (group full bins & submissions)
+  API-->>Recycler: Notify new batch (area, kg, polymer mix)
+  Recycler->>API: POST /quotes (price/kg, slot)
+  Coordinator->>API: Accept quote
+  API-->>Recycler: Pickup confirmed
+  Recycler->>API: POST /batches/:id/proof (photos, actual weight)
+  API->>Pay: Create invoice & collect payment
+  Pay-->>API: Webhook /payments/webhook (PAID)
+  API-->>Coordinator: Funds in Campus Wallet
+
+3) Sitemap / App Structure
+
+Public
+
+/ Landing (impact counters, partners, how it works)
+
+/learn Awareness micro-modules + quizzes
+
+/partners Recycler onboarding CTA
+
+Authenticated
+
+Student
+
+/collect Submit collection (QR/NFC bin scan, photos, est. weight)
+
+/rewards EcoPoints, badges, redeem store
+
+/profile History, streaks, leaderboard
+
+Coordinator
+
+/ops Dashboard (KPIs, alerts, pending verifications)
+
+/verifications Approve/reject submissions
+
+/bins Live map (IoT status, fill% heatmap)
+
+/batches Create/request quotes/track pickups
+
+/wallet Campus wallet & payouts
+
+Recycler
+
+/portal Open batches near me, quotes, pickups, invoices
+
+/kyc Documents, service areas, accepted polymers
+
+Admin
+
+/admin Users/RBAC, price floors, rewards, disputes, configs
+
+Reports
+
+/reports Time-series trends, polymer mix, CO₂ saved, revenue
+
+4) System Architecture (at a glance)
+
+Frontend: React/Vite + Auth (JWT/SSO), Map (Leaflet/Mapbox), File uploads, QR/NFC scan.
+
+Backend API: Node.js (Nest/Express) or Django REST.
+
+IoT Ingest: MQTT/HTTP → message queue (e.g., Redis/RabbitMQ) → worker → DB.
+
+DB: Postgres/MySQL (strong consistency), plus object storage (S3/GCS) for images.
+
+ML: Forecast jobs (CRON) → store predictions → dashboards.
+
+Payments: Razorpay/Stripe (invoice + webhook).
+
+Notifications: Email (SES), WhatsApp/SMS (Twilio), in-app toasts.
+
+Infra: Docker, CI/CD, env-segregated configs, logging/metrics (ELK/Grafana).
+
+5) Core Workflows (Step-by-Step)
+A) Student Collection & Rewards
+
+Student scans bin QR/NFC → /collect.
+
+Upload photos, est. weight, binId, GPS auto-filled.
+
+API saves submission(PENDING_QC) → notifies Coordinator.
+
+Coordinator approves → EcoPoints credited (base per kg + bonuses for complete metadata, streak).
+
+Student sees points & badges on /rewards; can redeem.
+
+B) IoT Event → Threshold → Batch
+
+Smart bin emits fill%/weight/battery → /iot/events (device token).
+
+Ingest normalizes & stores reading, updates bin status.
+
+If fill% >= threshold, system flags bin and suggests batch grouping.
+
+Coordinator groups flagged bins + approved submissions → Batch.
+
+C) Recycler Marketplace & Pickup
+
+Batch published to service-area recyclers → receive push/email.
+
+Recyclers submit quotes (price/kg, pickup window).
+
+Coordinator accepts best fit; pickup scheduled.
+
+On-site, recycler uploads weighment proof (photo, actual kg).
+
+Invoice auto-generated; payment link sent.
+
+On payment webhook, Campus Wallet credited; batch → PAID.
+
+D) Awareness & Reporting
+
+/learn quizzes award bonus EcoPoints.
+
+/reports visualize CO₂ avoided, polymer mix, trendlines, events impact.
+
+6) API Design (Representative)
+
+Auth: POST /auth/register, POST /auth/login, POST /auth/otp, GET /me
+
+Bins: GET /bins?campusId=..., GET /bins/:id, POST /bins/:id/assign
+
+IoT: POST /iot/events (binId, fillPct, weight, battery, ts, token)
+
+Submissions:
+
+POST /submissions (binId, photos[], estWeight, geo, notes)
+
+GET /submissions?status=PENDING_QC
+
+PATCH /submissions/:id (APPROVE/REJECT, verifiedWeight?)
+
+Batches:
+
+POST /batches (items: [binIds, submissionIds]), GET /batches
+
+POST /batches/:id/request-quotes, GET /batches/:id/quotes
+
+POST /batches/:id/accept-quote (quoteId)
+
+Quotes: POST /quotes (batchId, pricePerKg, slotStart, slotEnd), GET /quotes?batchId=...
+
+Pickup Proof: POST /batches/:id/proof (photos[], actualWeight, notes)
+
+Payments: POST /payments/invoice (batchId), POST /payments/webhook (provider payload)
+
+Rewards: GET /wallet, GET /wallet/ledger, POST /redeem
+
+Analytics: GET /stats/overview, GET /stats/time-series?metric=...
+
+Admin: POST /partners/approve, POST /pricefloors, POST /rewards/catalog
+
+7) Data Model (Minimal)
+
+users(id, name, email, role, campusId, kycStatus, phone)
+
+bins(id, campusId, lat, lng, type, threshold, status)
+
+bin_readings(id, binId, ts, fillPct, weight, battery, rssi)
+
+submissions(id, userId, binId, estWeight, verifiedWeight, photos[], status, geo, notes, verifiedBy, verifiedAt)
+
+batches(id, campusId, status, estTotalKg, actualKg, slotStart, slotEnd)
+
+batch_items(id, batchId, refType{BIN|SUBMISSION}, refId, estKg)
+
+quotes(id, batchId, recyclerId, pricePerKg, slotStart, slotEnd, status)
+
+invoices(id, batchId, recyclerId, amount, status, url, paidAt)
+
+wallets(id, campusId, balance)
+
+wallet_txn(id, walletId, refType, refId, amount, direction, ts)
+
+recycler_profiles(userId, areas[], polymers[], rating, docs[])
+
+rewards_ledger(id, userId, points, reason, refId, ts)
+
+8) Notifications & Automations
+
+Triggers
+
+submission.created → Coordinator verify prompt
+
+bin.threshold.hit → Suggest batch
+
+batch.requested → Notify recyclers in radius
+
+quote.received → Coordinator review
+
+pickup.T-2h → Reminder (both sides)
+
+invoice.created → Payment link to recycler
+
+payment.paid → Wallet credit
+
+Channels: Email, WhatsApp/SMS, in-app.
+
+Rate limits & retries for webhooks.
+
+9) Security & Compliance
+
+RBAC (Admin/Coordinator/Recycler/Student).
+
+JWT + short-lived access tokens; refresh tokens; device tokens for IoT.
+
+Idempotent endpoints for webhooks & IoT ingest.
+
+Media validation (file type/size), PII minimization, geo privacy on public views.
+
+Audit logs on all state transitions.
+
+10) ML & Innovation Hooks (Phase-2 ready)
+
+Image AI: classify plastic type from upload; flag contamination.
+
+Forecasting: per-bin daily kg forecast; event-aware peaks.
+
+Blockchain (optional): immutable ledger for batch → payment traceability.
+
+Green Tokens: EcoCoins redeemable with sponsors/CSR.
+
+11) Delivery Plan (Sprints)
+
+Sprint 1 (MVP): Auth/RBAC, /collect, verification, EcoPoints, bins map, basic reports.
+
+Sprint 2: Batches, recycler quotes, pickup proof, invoices, payments + webhooks.
+
+Sprint 3: IoT ingest + alerts, marketplace polish, redeem store, campus wallet.
+
+Sprint 4: ML forecasts, image AI, extended reports, partner APIs.
+
+12) Acceptance Criteria (MVP highlights)
+
+Submit → verify → points flow works end-to-end with images.
+
+Bins map shows live statuses; threshold alerts generate batch suggestions.
+
+Recycler quotes + pickup + invoice + payment webhook → wallet credit.
+
+Reports show total kg, CO₂ saved, polymer mix over time.

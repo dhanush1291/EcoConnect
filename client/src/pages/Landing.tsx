@@ -44,7 +44,7 @@ export default function Landing() {
             <Link href="/collect">
               <Button variant="ghost" data-testid="link-login">Login</Button>
             </Link>
-            <Link href="/collect">
+            <Link href="/register/student">
               <Button data-testid="button-get-started">Get Started</Button>
             </Link>
           </div>

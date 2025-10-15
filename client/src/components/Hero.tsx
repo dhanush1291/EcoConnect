@@ -29,14 +29,14 @@ export function Hero() {
           </p>
           
           <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-            <Link href="/collect">
+            <Link href="/register/student">
               <Button size="lg" data-testid="button-start-collecting">
                 Start Collecting
               </Button>
             </Link>
-            <Link href="/learn">
-              <Button size="lg" variant="outline" data-testid="button-learn-more">
-                Learn How It Works
+            <Link href="/register/company">
+              <Button size="lg" variant="outline" data-testid="button-partner-with-us">
+                Partner With Us
               </Button>
             </Link>
           </div>

@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import Landing from "@/pages/Landing";
+import StudentRegistration from "@/pages/StudentRegistration";
+import CompanyRegistration from "@/pages/CompanyRegistration";
 import StudentCollect from "@/pages/StudentCollect";
 import StudentRewards from "@/pages/StudentRewards";
 import CoordinatorOps from "@/pages/CoordinatorOps";
@@ -29,6 +31,10 @@ function Router({ role }: { role: Role }) {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      
+      {/* Registration Routes */}
+      <Route path="/register/student" component={StudentRegistration} />
+      <Route path="/register/company" component={CompanyRegistration} />
       
       {/* Student Routes */}
       <Route path="/collect" component={StudentCollect} />
@@ -60,14 +66,14 @@ function App() {
   const [location] = useLocation();
   const [role, setRole] = useState<Role>("student");
   
-  const isLanding = location === "/";
+  const isPublicRoute = location === "/" || location.startsWith("/register");
   
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
-  if (isLanding) {
+  if (isPublicRoute) {
     return (
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
